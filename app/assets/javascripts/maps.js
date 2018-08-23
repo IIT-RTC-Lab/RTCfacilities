@@ -2,6 +2,8 @@
 
 $(document).ready(function() {
   $('#floor').select2();
+  $('#room').select2({width: '100%'});
+  customStyles();
 
   var meny = Meny.create({
   	menuElement: document.querySelector( '.meny' ),
@@ -22,17 +24,33 @@ $(document).ready(function() {
   const mobile = $(window).width() <= 500;
   renderSVG(mobile, $('#floor').select2('data')[0].text, true);
 
-  $('.sw').change(function () {
+  $('#mockBeacons').change(function () {
     if ($(this).is(':checked')) {
       renderMockBeacons();
     } else {
       d3.selectAll('circle').remove();
     }
   });
+  
+  $('#showBeacons').change(function () {
+    if ($(this).is(':checked')) {
+      renderRealBeacons(mobile);
+    } else {
+      d3.selectAll('circle').remove();
+    }
+  });
 
   $('#floor').on('select2:select', function (e) {
-      var data = e.params.data;
-      renderSVG(mobile, data.text, false);
+    var data = e.params.data;
+    renderSVG(mobile, data.text, false);
+  });
+  
+  $('#room').on('select2:select', function (e) {
+    const currentPath = window.location.pathname;
+    const data = e.params.data;
+    $('#modalRoom').text(`${currentPath.charAt(1).toUpperCase() + currentPath.slice(2)} Room ${data.id.split('-')[1]}`);
+    $('#submitReport form').attr('action', `${currentPath}/${data.id.split('-')[1]}`);
+    $('#submitReport').modal({show: true});
   });
 
   $.get('https://crossorigin.me/https://api.darksky.net/forecast/4152be98ca71e28f0d675829b06509f9/41.838543,-87.627276?units=si').then((weather) => {
@@ -41,11 +59,22 @@ $(document).ready(function() {
   });
 });
 
+// Should figure out a way to do this in css
+function customStyles() {
+  // Custom styles for stuart maps
+  if (window.location.pathname === '/stuart') {
+    $('body').height('100vh');
+  }
+}
+
 function getRandomNumber(min, max) {
   return Math.random() * (max - min) + min;
 }
 
 function returnRGBColor(temp) {
+  if (!temp) {
+    return 'rgb(159, 161, 165)';
+  }
   let max = 50;
   let avg = temp/max;
   let red = Math.round(avg*255);
@@ -62,6 +91,21 @@ function renderMockBeacons() {
   for (i = 0; i < 10; i++) {
     renderBeacon(getRandomNumber(200, width), getRandomNumber(100, height), Math.floor(getRandomNumber(0, 50)));
   }
+}
+
+function renderRealBeacons(mobile) {
+  const building = $('#floor').select2('data')[0].text.split('-')[0];
+  const floor = $('#floor').select2('data')[0].text.split('-')[1];
+  // Database correlation for building_id's and Building's. Should do this via API
+  const dbcorrelation = {'AM': 4}
+  console.log(floor);
+  console.log(dbcorrelation[building]);
+  $.get(`https://api.iitrtclab.com/facilities?building_id=${dbcorrelation[building]}&floor=${floor}`).then((beacons) => {
+    console.log(beacons);
+    beacons.forEach(function(beacon) {
+      setBeacon(beacon.x, beacon.y, mobile, beacon.temperature)
+    });
+  });
 }
 
 function renderBeacon (x, y, temp) {
@@ -100,20 +144,21 @@ function renderBeacon (x, y, temp) {
   }
 
 function renderSVG (mobile, svgName, initialRender) {
+  const currentPath = window.location.pathname;
   const svgPath = !mobile ? `/svg/${svgName}-R.svg` : `/svg/${svgName}.svg`;
 
   d3.xml(svgPath, function(xml) {
     $('[data-toggle="tooltip"]').tooltip('hide');
     try {
-      $('#svgContainer').empty();
-      $('#svgContainer').append(xml.documentElement);
+      $('.svgContainer').empty();
+      $('.svgContainer').append(xml.documentElement);
       const svg = d3.select('svg');
       svg.attr('width', '100%');
       svg.attr('height', !mobile ? '87vh' : '100%');
 
       svg.selectAll('path').each(function (d, i) {
         let room = d3.select(this).attr('id');
-        $.get(`/stuart/${room.split('-')[1]}`).then((room) => {
+        $.get(`${currentPath}/${room.split('-')[1]}`).then((room) => {
           let higherCount = 0;
           let hcount = 0;
           let lcount = 0;
@@ -148,8 +193,10 @@ function renderSVG (mobile, svgName, initialRender) {
         });
       });
       $('path').click(function(e) {
+        const room = e.target.id.split('-')[1]
+        $('#modalRoom').text(`${currentPath.charAt(1).toUpperCase() + currentPath.slice(2)} Room ${room}`);
         $('[data-toggle="tooltip"]').tooltip('hide');
-        $('#submitReport form').attr('action', `/stuart/${e.target.id.split('-')[1]}`);
+        $('#submitReport form').attr('action', `${currentPath}/${room}`);
         $('#submitReport').modal({show: true});
       });
       if (!initialRender) {
@@ -162,4 +209,63 @@ function renderSVG (mobile, svgName, initialRender) {
       </div>`);
     }
   });
+}
+
+// Functions for mapping real life becons on Map
+function setLocation(x, y, radius) {
+    d3.select('svg').append("circle")
+                    .attr("cx", x)
+                    .attr("cy", y)
+                    .attr("r", 15);
+
+    d3.select('svg').append("circle")
+                    .attr("cx", x)
+                    .attr("cy", y)
+                    .style("fill", "#5e8fd1")
+                    .style("fill-opacity", "0.59")
+                    .attr("r", 10)
+                    .transition()
+                    .duration(750)
+                    .attr("r", radius);
+}
+
+// Gets aspect ratio for SVG Map. Should be same as real aspect ration of building floor.
+function getAspectRatio() {
+  const origin = d3.select('.origin').filter('path').node().getBBox();
+  const originTop = d3.select('.originTop').filter('path').node().getBBox();
+  return ((origin.y + origin.height) - originTop.y)/((originTop.x + originTop.width)- origin.x)
+}
+
+// Gets aspect ratio for real building floor from meta-data embedded in SVG maps
+function getRealAspectRatio() {
+  return parseFloat(d3.select('svg').attr('data-height'), 10)/parseFloat(d3.select('svg').attr('data-width'), 10)
+}
+
+function mapX (x) {
+  const origin = d3.select('.origin').filter('path').node().getBBox();
+  const originTop = d3.select('.originTop').filter('path').node().getBBox();
+  const in_min = 0;
+  const in_max = parseFloat(d3.select('svg').attr('data-width'), 10);
+  const out_min = origin.x;
+  const out_max = originTop.x + originTop.width;
+  return (x - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+function mapY (y) {
+  const origin = d3.select('.origin').filter('path').node().getBBox();
+  const originTop = d3.select('.originTop').filter('path').node().getBBox();
+  const in_min = 0;
+  const in_max = parseFloat(d3.select('svg').attr('data-height'), 10);
+  const out_min = origin.y + origin.height;
+  const out_max = originTop.y;
+  return (y - in_min) * (out_max - out_min) / (in_max - in_min) + out_min;
+}
+
+function setBeacon(x, y, mobile, temperature) {
+  if (mobile) {
+    renderBeacon(mapX(x), mapY(y), temperature);
+  } else {
+    const newX = mapX(parseFloat(d3.select('svg').attr('data-width'), 10)) - mapX(x);
+    renderBeacon(mapY(y), newX, temperature);
+  }
 }

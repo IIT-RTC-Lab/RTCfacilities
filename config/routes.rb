@@ -1,4 +1,10 @@
 Rails.application.routes.draw do
+  get 'sessions/create'
+  
+  get '/login', to: 'sessions#login', as: 'login'
+  
+  get '/logout', to: 'sessions#logout', as: 'logout'
+
   get '/admin', to: 'admin#index', as: 'admin'
 
   get '/admin/stuart', as: 'admin_stuart'
@@ -14,10 +20,14 @@ Rails.application.routes.draw do
   post '/stuart/:roomNumber', to: 'maps#stuart_room_post'
 
   get '/alumini', to: 'maps#alumini', as: 'alumini'
+  
+  get '/alumini/:roomNumber', to: 'maps#alumini_room'
+  
+  post '/alumini/:roomNumber', to: 'maps#alumini_room_post'
 
   root 'landing#index'
-
-  resources :buildings
+  
+  match 'auth/:provider/callback', to: 'sessions#create', via: [:post,:get]
 
   # For details on the DSL available within this file, see http://guides.rubyonrails.org/routing.html
 end

@@ -3,9 +3,9 @@
     %h3 Advanced
     %ul
       %li
-        %label{:for => "toggle-2", :style => "margin-right: 4px;"} Mock Beacons 
-        %input#toggle-2.sw{:name => "toggle", :type => "checkbox"}/
-        %label{:for => "toggle-2"}
+        %label{:for => "mockBeacons", :style => "margin-right: 4px;"} Mock Beacons 
+        %input#mockBeacons.sw{:name => "toggle", :type => "checkbox"}/
+        %label{:for => "mockBeacons"}
           %span
       %li
         Outside Temperature: 
@@ -13,6 +13,13 @@
       %li
         Outside Humidity: 
         %span#outsideHumidity N/A
+      %li
+        #label{:for => "room"} Submit Request for Room
+        %select#room{"data-live-search" => "true"}
+          - @rooms.each do |room|
+            %option{"data-tokens" => "#{room.roomNumber.split('-')[1]}"}
+              = room.roomNumber
+
 
 %div.meny-arrow
 
@@ -30,21 +37,23 @@
           %option{:value => "0"} SB-00
           %option{:value => "1", :selected => "true"} SB-01
           %option{:value => "2"} SB-02
-  - if @flash.key?('success')
+  - if flash[:notice]
     .alert.alert-success.container{:role => "alert", :style => "margin-top: 25px;"}
-      = @flash[:success]
-  - elsif @flash.key?('error')
-    .alert.alert-error.container{:role => "alert", :style => "margin-top: 25px;"}
-      = @flash[:error]
+      = flash[:notice]
+  - elsif flash[:error]
+    .alert.alert-danger.container{:role => "alert", :style => "margin-top: 25px;"}
+      = flash[:error]
 
-  %div#svgContainer
+  %div.svgContainer
 
 / Modal
 #submitReport.modal.fade{"aria-hidden" => "true", "aria-labelledby" => "submitReportLabel", :role => "dialog", :tabindex => "-1"}
   .modal-dialog{:role => "document"}
     .modal-content
       .modal-header
-        %h5#submitReportLabel.modal-title Submit Request
+        %h5#submitReportLabel.modal-title
+          Submit Request for
+          %span#modalRoom
         %button.close{"aria-label" => "Close", "data-dismiss" => "modal", :type => "button"}
           %span{"aria-hidden" => "true"} ×
       .modal-body
